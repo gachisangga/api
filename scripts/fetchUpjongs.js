@@ -1,0 +1,1 @@
+//대/중/소 업종 코드 → large/middle/smallUpjongList
