@@ -1,24 +1,15 @@
-const express = require('express');
-const connectDB = require('./db');
-const dotenv = require('dotenv');
-const openApiProxy = require('./openApiProxy'); // 추가
-
-dotenv.config();
+import express from "express";
+import bodyParser from "body-parser";
+import recommendRouter from "./routes/recommend.js";
 
 const app = express();
-app.set('port', process.env.PORT || 3000);
+const PORT = process.env.PORT || 3000;
 
-// MongoDB 연결
-connectDB();
+app.use(bodyParser.json());
 
-// 기본 라우트
-app.get('/', (req, res) => {
-  res.send('Hello, Express');
-});
+// 추천 API 등록
+app.use("/recommend", recommendRouter);
 
-// 공공데이터 중계 API 라우터 연결
-app.use('/api/open', openApiProxy);
-
-app.listen(app.get('port'), () => {
-  console.log(app.get('port'), '번 포트에서 대기 중');
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
