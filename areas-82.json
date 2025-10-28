@@ -1,0 +1,330 @@
+[
+  {
+    "AREA_NM": "강남 MICE 관광특구",
+    "AREA_CD": "POI001"
+  },
+  {
+    "AREA_NM": "동대문 관광특구",
+    "AREA_CD": "POI002"
+  },
+  {
+    "AREA_NM": "명동 관광특구",
+    "AREA_CD": "POI003"
+  },
+  {
+    "AREA_NM": "이태원 관광특구",
+    "AREA_CD": "POI004"
+  },
+  {
+    "AREA_NM": "잠실 관광특구",
+    "AREA_CD": "POI005"
+  },
+  {
+    "AREA_NM": "종로·청계 관광특구",
+    "AREA_CD": "POI006"
+  },
+  {
+    "AREA_NM": "홍대 관광특구",
+    "AREA_CD": "POI007"
+  },
+  {
+    "AREA_NM": "광화문·덕수궁",
+    "AREA_CD": "POI009"
+  },
+  {
+    "AREA_NM": "보신각",
+    "AREA_CD": "POI010"
+  },
+  {
+    "AREA_NM": "가산디지털단지역",
+    "AREA_CD": "POI013"
+  },
+  {
+    "AREA_NM": "강남역",
+    "AREA_CD": "POI014"
+  },
+  {
+    "AREA_NM": "건대입구역",
+    "AREA_CD": "POI015"
+  },
+  {
+    "AREA_NM": "고덕역",
+    "AREA_CD": "POI016"
+  },
+  {
+    "AREA_NM": "고속터미널역",
+    "AREA_CD": "POI017"
+  },
+  {
+    "AREA_NM": "교대역",
+    "AREA_CD": "POI018"
+  },
+  {
+    "AREA_NM": "구로디지털단지역",
+    "AREA_CD": "POI019"
+  },
+  {
+    "AREA_NM": "구로역",
+    "AREA_CD": "POI020"
+  },
+  {
+    "AREA_NM": "군자역",
+    "AREA_CD": "POI021"
+  },
+  {
+    "AREA_NM": "대림역",
+    "AREA_CD": "POI023"
+  },
+  {
+    "AREA_NM": "동대문역",
+    "AREA_CD": "POI024"
+  },
+  {
+    "AREA_NM": "뚝섬역",
+    "AREA_CD": "POI025"
+  },
+  {
+    "AREA_NM": "미아사거리역",
+    "AREA_CD": "POI026"
+  },
+  {
+    "AREA_NM": "발산역",
+    "AREA_CD": "POI027"
+  },
+  {
+    "AREA_NM": "사당역",
+    "AREA_CD": "POI029"
+  },
+  {
+    "AREA_NM": "서울대입구역",
+    "AREA_CD": "POI031"
+  },
+  {
+    "AREA_NM": "서울식물원·마곡나루역",
+    "AREA_CD": "POI032"
+  },
+  {
+    "AREA_NM": "서울역",
+    "AREA_CD": "POI033"
+  },
+  {
+    "AREA_NM": "선릉역",
+    "AREA_CD": "POI034"
+  },
+  {
+    "AREA_NM": "성신여대입구역",
+    "AREA_CD": "POI035"
+  },
+  {
+    "AREA_NM": "수유역",
+    "AREA_CD": "POI036"
+  },
+  {
+    "AREA_NM": "신논현역·논현역",
+    "AREA_CD": "POI037"
+  },
+  {
+    "AREA_NM": "신도림역",
+    "AREA_CD": "POI038"
+  },
+  {
+    "AREA_NM": "신림역",
+    "AREA_CD": "POI039"
+  },
+  {
+    "AREA_NM": "신촌·이대역",
+    "AREA_CD": "POI040"
+  },
+  {
+    "AREA_NM": "양재역",
+    "AREA_CD": "POI041"
+  },
+  {
+    "AREA_NM": "역삼역",
+    "AREA_CD": "POI042"
+  },
+  {
+    "AREA_NM": "연신내역",
+    "AREA_CD": "POI043"
+  },
+  {
+    "AREA_NM": "오목교역·목동운동장",
+    "AREA_CD": "POI044"
+  },
+  {
+    "AREA_NM": "왕십리역",
+    "AREA_CD": "POI045"
+  },
+  {
+    "AREA_NM": "용산역",
+    "AREA_CD": "POI046"
+  },
+  {
+    "AREA_NM": "이태원역",
+    "AREA_CD": "POI047"
+  },
+  {
+    "AREA_NM": "장지역",
+    "AREA_CD": "POI048"
+  },
+  {
+    "AREA_NM": "장한평역",
+    "AREA_CD": "POI049"
+  },
+  {
+    "AREA_NM": "천호역",
+    "AREA_CD": "POI050"
+  },
+  {
+    "AREA_NM": "총신대입구(이수)역",
+    "AREA_CD": "POI051"
+  },
+  {
+    "AREA_NM": "충정로역",
+    "AREA_CD": "POI052"
+  },
+  {
+    "AREA_NM": "합정역",
+    "AREA_CD": "POI053"
+  },
+  {
+    "AREA_NM": "혜화역",
+    "AREA_CD": "POI054"
+  },
+  {
+    "AREA_NM": "홍대입구역(2호선)",
+    "AREA_CD": "POI055"
+  },
+  {
+    "AREA_NM": "회기역",
+    "AREA_CD": "POI056"
+  },
+  {
+    "AREA_NM": "가락시장",
+    "AREA_CD": "POI058"
+  },
+  {
+    "AREA_NM": "가로수길",
+    "AREA_CD": "POI059"
+  },
+  {
+    "AREA_NM": "광장(전통)시장",
+    "AREA_CD": "POI060"
+  },
+  {
+    "AREA_NM": "김포공항",
+    "AREA_CD": "POI061"
+  },
+  {
+    "AREA_NM": "노량진",
+    "AREA_CD": "POI063"
+  },
+  {
+    "AREA_NM": "덕수궁길·정동길",
+    "AREA_CD": "POI064"
+  },
+  {
+    "AREA_NM": "북촌한옥마을",
+    "AREA_CD": "POI066"
+  },
+  {
+    "AREA_NM": "서촌",
+    "AREA_CD": "POI067"
+  },
+  {
+    "AREA_NM": "성수카페거리",
+    "AREA_CD": "POI068"
+  },
+  {
+    "AREA_NM": "쌍문역",
+    "AREA_CD": "POI070"
+  },
+  {
+    "AREA_NM": "압구정로데오거리",
+    "AREA_CD": "POI071"
+  },
+  {
+    "AREA_NM": "여의도",
+    "AREA_CD": "POI072"
+  },
+  {
+    "AREA_NM": "연남동",
+    "AREA_CD": "POI073"
+  },
+  {
+    "AREA_NM": "영등포 타임스퀘어",
+    "AREA_CD": "POI074"
+  },
+  {
+    "AREA_NM": "용리단길",
+    "AREA_CD": "POI076"
+  },
+  {
+    "AREA_NM": "이태원 앤틱가구거리",
+    "AREA_CD": "POI077"
+  },
+  {
+    "AREA_NM": "인사동",
+    "AREA_CD": "POI078"
+  },
+  {
+    "AREA_NM": "창동 신경제 중심지",
+    "AREA_CD": "POI079"
+  },
+  {
+    "AREA_NM": "청담동 명품거리",
+    "AREA_CD": "POI080"
+  },
+  {
+    "AREA_NM": "청량리 제기동 일대 전통시장",
+    "AREA_CD": "POI081"
+  },
+  {
+    "AREA_NM": "해방촌·경리단길",
+    "AREA_CD": "POI082"
+  },
+  {
+    "AREA_NM": "DDP(동대문디자인플라자)",
+    "AREA_CD": "POI083"
+  },
+  {
+    "AREA_NM": "DMC(디지털미디어시티)",
+    "AREA_CD": "POI084"
+  },
+  {
+    "AREA_NM": "북창동 먹자골목",
+    "AREA_CD": "POI114"
+  },
+  {
+    "AREA_NM": "남대문시장",
+    "AREA_CD": "POI115"
+  },
+  {
+    "AREA_NM": "익선동",
+    "AREA_CD": "POI116"
+  },
+  {
+    "AREA_NM": "신정네거리역",
+    "AREA_CD": "POI117"
+  },
+  {
+    "AREA_NM": "잠실새내역",
+    "AREA_CD": "POI118"
+  },
+  {
+    "AREA_NM": "잠실역",
+    "AREA_CD": "POI119"
+  },
+  {
+    "AREA_NM": "잠실롯데타워 일대",
+    "AREA_CD": "POI120"
+  },
+  {
+    "AREA_NM": "송리단길·호수단길",
+    "AREA_CD": "POI121"
+  },
+  {
+    "AREA_NM": "신촌 스타광장",
+    "AREA_CD": "POI122"
+  }
+]
