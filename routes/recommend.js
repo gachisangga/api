@@ -37,6 +37,11 @@ const ReqSchema = z.object({
     adongCd: z.string().nullable().optional(),
     ldongCd: z.string().nullable().optional(),
   })).nonempty(),
+  // 지금은 알고리즘에는 안 쓰고, 필요하면 나중에 활용 가능
+  targetCate: z.object({
+    level: z.enum(["L", "M", "S"]), // L=indsLclsNm, M=indsMclsNm, S=indsSclsNm
+    name: z.string(),
+  }).optional(),
 });
 
 /** ====== 유틸 ====== */
@@ -49,6 +54,60 @@ function entropyFromCounts(counts) {
   }, 0);
 }
 const safeRate = (n, d) => (d > 0 ? n / d : 0);
+
+/** 🔹 프론트 드롭다운용 계층형 분류 목록 수집
+ *
+ *  taxonomy = {
+ *    L: ["음식", "소매", ...],
+ *    M: ["한식", "중식", ...],           // 전체 중분류 목록
+ *    S: ["피자", "치킨", ...],          // 전체 소분류 목록
+ *    MByL: { "음식": ["한식","중식",...] },
+ *    SByM: { "한식": ["한식 일반",...], ... }
+ *  }
+ */
+function collectTaxonomy(pois) {
+  const setL = new Set();
+  const setM = new Set();
+  const setS = new Set();
+  const mapL2M = {};
+  const mapM2S = {};
+
+  for (const p of pois) {
+    const L = p?.indsLclsNm || null;
+    const M = p?.indsMclsNm || null;
+    const S = p?.indsSclsNm || null;
+
+    if (L) {
+      setL.add(L);
+      if (!mapL2M[L]) mapL2M[L] = new Set();
+    }
+    if (M) {
+      setM.add(M);
+      if (!mapM2S[M]) mapM2S[M] = new Set();
+      if (L) mapL2M[L].add(M);
+    }
+    if (S) {
+      setS.add(S);
+      if (M) mapM2S[M].add(S);
+    }
+  }
+
+  const L = Array.from(setL);
+  const M = Array.from(setM);
+  const S = Array.from(setS);
+
+  const MByL = {};
+  for (const [lname, s] of Object.entries(mapL2M)) {
+    MByL[lname] = Array.from(s);
+  }
+
+  const SByM = {};
+  for (const [mname, s] of Object.entries(mapM2S)) {
+    SByM[mname] = Array.from(s);
+  }
+
+  return { L, M, S, MByL, SByM };
+}
 
 /** ====== 임계값(튜닝 가능) ====== */
 const THRESHOLDS = {
@@ -143,8 +202,8 @@ function buildWhyDetails(features, byCate, topCategory) {
     poi: {
       total: poi_total,
       entropy: poi_entropy,
-      topMost: many,          // 상위 다빈도 업종
-      leastCommon: few,       // 하위(희소) 업종
+      topMost: many,
+      leastCommon: few,
       competition: {
         topCategory,
         sameCount: same,
@@ -165,6 +224,7 @@ function buildWhyDetails(features, byCate, topCategory) {
 
 /** ====== 베이스라인 가중치 ====== */
 const WEIGHTS = {
+  // 소분류 이름이 이 중 하나랑 딱 맞는 경우에만 특수 가중치 적용
   "카페/디저트": { w20s: 0.7, w30s: 0.3, wf: 0.3, wLvl: 0.4, wPay: 0.4, wEnt: 0.2, wComp: 1.0 },
   "한식":        { w20s: 0.0, w30s: 0.2, wf: 0.0, wLvl: 0.3, wPay: 0.3, wEnt: 0.1, wComp: 1.0 },
   "분식":        { w20s: 0.6, w30s: 0.2, wf: 0.0, wLvl: 0.2, wPay: 0.3, wEnt: 0.2, wComp: 1.0 },
@@ -174,14 +234,12 @@ const WEIGHTS = {
 };
 const DEFAULT_W = { w20s: 0.2, w30s: 0.2, wf: 0.1, wLvl: 0.2, wPay: 0.2, wEnt: 0.1, wComp: 1.0 };
 
-/** ====== 스코어링 ====== */
+/** ====== 스코어링 (항상 "소분류" 기준) ====== */
 function scoreByCategory(features, poiByCate) {
   const { rate_20s, rate_30s, female_rate, cmrcl_level, pay_cnt_log, poi_entropy } = features;
   const total = Object.values(poiByCate).reduce((a, b) => a + b, 0) || 1;
 
-  const categories = Object.keys(poiByCate).length
-    ? Object.keys(poiByCate)
-    : Object.keys(WEIGHTS);
+  const categories = Object.keys(poiByCate);
 
   const scores = {};
   for (const cate of categories) {
@@ -230,13 +288,13 @@ router.get("/_ping", (_req, res) => res.json({ ok: true, from: "recommend router
 
 router.post("/recommendations", async (req, res) => {
   try {
-    const { lat, lng, radius, admmCd, areaCd, topK, pois } = ReqSchema.parse(req.body);
+    const { lat, lng, radius, admmCd, areaCd, topK, pois, targetCate } = ReqSchema.parse(req.body);
     const db = await getDB();
 
-    // 1) POI 요약
+    // 1) POI 요약 — 🔹 항상 "소분류(S)"로 byCate 구성
     const byCate = {};
     for (const p of pois) {
-      const cateRaw = p?.indsLclsNm ?? "기타";
+      const cateRaw = p?.indsSclsNm ?? p?.indsMclsNm ?? p?.indsLclsNm ?? "기타";
       const cate = (typeof cateRaw === "string" ? cateRaw : "기타").trim();
       byCate[cate] = (byCate[cate] || 0) + 1;
     }
@@ -272,7 +330,7 @@ router.post("/recommendations", async (req, res) => {
       poi_entropy, poi_total,
     };
 
-    // 5) 스코어링 → Top-K
+    // 5) 스코어링 → Top-K (항상 소분류 기준)
     const scored = scoreByCategory(featureVector, byCate);
     const topCategories = Object.entries(scored)
       .sort((a, b) => b[1] - a[1])
@@ -286,13 +344,18 @@ router.post("/recommendations", async (req, res) => {
 
     // 6) 응답
     res.json({
-      topCategories,
+      topCategories,  // 🔹 항상 소분류 이름 리스트
       why: {
-        line: summaryLine,   // 예: "이 지역은 20대/여성 비중 높음 + 결제활동 상위권 → 카페/디저트 추천"
-        details: whyDetails, // ★ 숫자와 근거(인구/상권/업종/경쟁)
+        line: summaryLine,
+        details: whyDetails,
       },
       debug: {
-        inputs: { lat, lng, radius, admmCd: admmCd || null, areaCd: areaCd || null },
+        inputs: {
+          lat, lng, radius,
+          admmCd: admmCd || null,
+          areaCd: areaCd || null,
+          targetCate: targetCate || null,
+        },
         poi: { byCate, poi_total, poi_entropy },
         commerce: cmr ? {
           areaCd: cmr.areaCd,
@@ -307,6 +370,7 @@ router.post("/recommendations", async (req, res) => {
           totNmprCnt: demo.totNmprCnt
         } : null,
         featureVector,
+        taxonomy: collectTaxonomy(pois), // 🔹 계층형 분류
       }
     });
   } catch (err) {

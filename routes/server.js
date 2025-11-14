@@ -10,7 +10,7 @@ const DB_NAME = process.env.DB_NAME || "yourdb";
 const PORT = process.env.PORT || 3000;
 
 /** ====== Mongo 연결 ====== */
-const client = new MongoClient(MONGO_URI);
+const client = new MongoClient(MONGO_URI);ㄴ
 await client.connect();
 const db = client.db(DB_NAME);
 
@@ -23,7 +23,7 @@ app.use(express.json());
 const ReqSchema = z.object({
   lat: z.coerce.number(),        // "37.5"도 OK
   lng: z.coerce.number(),
-  admmCd: z.string().optional(), // 행정동 코드
+  admmCd: z.string().optional(), // 행정동 코드cㄴ
   areaCd: z.string().optional(), // 상권 코드(있으면 seoulCmrclRaws 조회)
   radius: z.coerce.number().int().positive().max(1500).optional().default(300),
   topK: z.coerce.number().int().positive().max(10).optional().default(5),
@@ -204,3 +204,4 @@ app.post("/api/v1/recommendations", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`recommend API running on http://localhost:${PORT}`);
 });
+ 
