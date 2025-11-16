@@ -4,11 +4,24 @@ import { MongoClient } from "mongodb";
 import { z } from "zod";
 import "dotenv/config";
 
+// 🔹 ESM 환경에서 JSON 파일 읽기용
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
 const router = Router();
+
+/** ====== __dirname 대체 (ESM) ====== */
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/** 🔹 좌표까지 붙인 82개 상권 JSON 로드 */
+const areasPath = path.join(__dirname, "../areas-82-with-coords.json");
+const areas = JSON.parse(fs.readFileSync(areasPath, "utf8"));
 
 /** ====== Mongo 연결 (싱글톤) ====== */
 const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017";
-const DB_NAME = process.env.DB_NAME || "yourdb";
+const DB_NAME = process.env.DB_NAME || "CapstoneDB";
 const client = new MongoClient(MONGO_URI, { maxPoolSize: 5 });
 let db;
 async function getDB() {
@@ -24,7 +37,7 @@ const ReqSchema = z.object({
   lat: z.coerce.number(),
   lng: z.coerce.number(),
   admmCd: z.string().optional(),
-  areaCd: z.string().optional(),
+  areaCd: z.string().optional(), // 클라이언트가 직접 넣을 수도 있음
   radius: z.coerce
     .number()
     .int()
@@ -96,7 +109,10 @@ function collectTaxonomy(pois) {
     }
     if (S) {
       setS.add(S);
-      if (M) mapM2S[M].add(S);
+      if (M) {
+        mapM2S[M] = mapM2S[M] || new Set();
+        mapM2S[M].add(S);
+      }
     }
   }
 
@@ -117,6 +133,32 @@ function collectTaxonomy(pois) {
   return { L, M, S, MByL, SByM };
 }
 
+/** 🔹 위도/경도 → 가장 가까운 서울 상권(areaCd) 찾기 */
+function findNearestAreaCd(lat, lng) {
+  if (lat == null || lng == null) return null;
+  let best = null;
+  let bestDist2 = Infinity;
+
+  for (const a of areas) {
+    const aLat = a.lat;
+    const aLng = a.lng;
+    if (aLat == null || aLng == null) continue;
+
+    const dLat = lat - aLat;
+    const dLng = lng - aLng;
+    const dist2 = dLat * dLat + dLng * dLng;
+
+    if (dist2 < bestDist2) {
+      bestDist2 = dist2;
+      best = a;
+    }
+  }
+
+  if (!best) return null;
+  // enrich-areas-with-coords 결과는 AREA_CD/AREA_NM 유지 + lat/lng 추가
+  return best.AREA_CD || best.areaCd || null;
+}
+
 /** ====== 임계값 ====== */
 const THRESHOLDS = {
   RATE20S_HIGH: 0.22,
@@ -131,6 +173,20 @@ const THRESHOLDS = {
   COMP_UNDER: 0.2,
   COMP_MIN_TOTAL: 3,
 };
+
+/** 🔹 상권레벨(문자) → 숫자 점수로 매핑 */
+function mapCmrclLevelToScore(level) {
+  if (!level) return 0;
+  const table = {
+    "매우낮음": 0.1,
+    "낮음": 0.3,
+    "보통": 0.5,
+    "높음": 0.7,
+    "매우높음": 0.9,
+  };
+  const key = String(level).trim();
+  return table[key] ?? 0.5; // 알 수 없는 값이면 중간 정도로
+}
 
 /** ====== 설명 요약(Why this?) ====== */
 function buildSummaryLine(features, byCate, topCategory) {
@@ -185,12 +241,17 @@ const bottomN = (obj, n = 5) =>
 
 /**
  * 상세 이유 블록
- * @param {object} features      - featureVector
- * @param {object} byCate        - { 카테고리명: 개수, ... }
- * @param {string} topCategory   - 추천 1순위 카테고리
- * @param {boolean} hasCommerceData - 상권/결제 데이터(cmr)가 실제로 존재하는지 여부
+ * @param {object} features        - featureVector
+ * @param {object} byCate          - { 카테고리명: 개수, ... }
+ * @param {string} topCategory     - 추천 1순위 카테고리
+ * @param {boolean} hasCommerceData - 상권/결제 데이터가 DB에 실제로 존재하는지 여부
  */
-function buildWhyDetails(features, byCate, topCategory, hasCommerceData = false) {
+function buildWhyDetails(
+  features,
+  byCate,
+  topCategory,
+  hasCommerceData = false
+) {
   const {
     rate_20s = 0,
     rate_30s = 0,
@@ -230,13 +291,13 @@ function buildWhyDetails(features, byCate, topCategory, hasCommerceData = false)
     commerce: {
       cmrcl_level,
       pay_cnt_log,
-      // ✅ 실제로 상권 데이터(cmr)가 있었고, 그 값이 0/0인 경우에만 "데이터 없음/부족"
-      notes:
-        hasCommerceData &&
-        pay_cnt_log === 0 &&
-        cmrcl_level === 0
-          ? "상권(결제) 데이터 없음/부족"
-          : undefined,
+      // ✅ 상권 데이터 자체가 없으면 "데이터 없음/부족"
+      //    상권 데이터는 있는데 값이 0/0이면 "매우 낮거나 집계되지 않음"
+      notes: !hasCommerceData
+        ? "상권(결제) 데이터 없음/부족"
+        : pay_cnt_log === 0 && cmrcl_level === 0
+        ? "상권(결제) 데이터가 매우 낮거나 집계되지 않았어요."
+        : undefined,
       flags: {
         payHigh: pay_cnt_log >= THRESHOLDS.PAY_LOG_HIGH,
         payMid: pay_cnt_log >= THRESHOLDS.PAY_LOG_MID,
@@ -279,8 +340,24 @@ const WEIGHTS = {
     wEnt: 0.2,
     wComp: 1.0,
   },
-  한식: { w20s: 0.0, w30s: 0.2, wf: 0.0, wLvl: 0.3, wPay: 0.3, wEnt: 0.1, wComp: 1.0 },
-  분식: { w20s: 0.6, w30s: 0.2, wf: 0.0, wLvl: 0.2, wPay: 0.3, wEnt: 0.2, wComp: 1.0 },
+  한식: {
+    w20s: 0.0,
+    w30s: 0.2,
+    wf: 0.0,
+    wLvl: 0.3,
+    wPay: 0.3,
+    wEnt: 0.1,
+    wComp: 1.0,
+  },
+  분식: {
+    w20s: 0.6,
+    w30s: 0.2,
+    wf: 0.0,
+    wLvl: 0.2,
+    wPay: 0.3,
+    wEnt: 0.2,
+    wComp: 1.0,
+  },
   패스트푸드: {
     w20s: 0.6,
     w30s: 0.2,
@@ -347,13 +424,34 @@ function scoreByCategory(features, poiByCate) {
 
 /** ====== DB 조회 ====== */
 async function getLatestCommerce(db, areaCd) {
-  if (!areaCd) return null;
-  return await db
-    .collection("seoulCmrclRaws")
-    .find({ areaCd })
+  const col = db.collection("seoulCmrclRaws");
+
+  // 1) areaCd로 먼저 시도
+  if (areaCd) {
+    const byArea = await col
+      .find({ areaCd })
+      .sort({ cmrclTime: -1 })
+      .limit(1)
+      .next();
+
+    if (byArea) {
+      return { doc: byArea, from: "area" };
+    }
+  }
+
+  // 2) areaCd로 못 찾으면, 전체 중 가장 최신 데이터 하나라도 사용 (전역 fallback)
+  const latestAny = await col
+    .find({})
     .sort({ cmrclTime: -1 })
     .limit(1)
     .next();
+
+  if (latestAny) {
+    return { doc: latestAny, from: "global" };
+  }
+
+  // 3) 컬렉션이 비어있으면 진짜 데이터 없음
+  return { doc: null, from: "none" };
 }
 
 async function getLatestPopulation(db, admmCd, fallbackSggNm) {
@@ -449,8 +547,6 @@ router.get("/brands/by-category", async (req, res) => {
     const { l, m, year = "2023", limit = "30" } = req.query;
 
     if (!l && !m) {
-      // 완전 넓게 보고 싶으면 이 체크를 지워도 됨
-      // 지금은 UX 차원에서 메시지만
       console.log("brands/by-category: no l/m, 연도만으로 조회");
     }
 
@@ -476,9 +572,12 @@ router.get("/_ping", (_req, res) =>
 // 🔹 추천
 router.post("/recommendations", async (req, res) => {
   try {
-    const { lat, lng, radius, admmCd, areaCd, topK, pois, targetCate } =
+    let { lat, lng, radius, admmCd, areaCd, topK, pois, targetCate } =
       ReqSchema.parse(req.body);
     const db = await getDB();
+
+    // 0) areaCd가 없으면 위/경도 기준으로 가장 가까운 서울 상권 찾기
+    const resolvedAreaCd = areaCd || findNearestAreaCd(lat, lng);
 
     // 1) POI 요약 — 항상 "소분류(S)" 우선
     const byCate = {};
@@ -486,19 +585,39 @@ router.post("/recommendations", async (req, res) => {
       const cateRaw =
         p?.indsSclsNm ?? p?.indsMclsNm ?? p?.indsLclsNm ?? "기타";
       const cate =
-        typeof cateRaw === "string"
-          ? cateRaw.trim() || "기타"
-          : "기타";
+        typeof cateRaw === "string" ? cateRaw.trim() || "기타" : "기타";
       byCate[cate] = (byCate[cate] || 0) + 1;
     }
     const counts = Object.values(byCate);
     const poi_total = counts.reduce((a, b) => a + b, 0);
     const poi_entropy = entropyFromCounts(counts);
 
-    // 2) 실시간 상권
-    const cmr = await getLatestCommerce(db, areaCd);
-    const cmrcl_level = cmr?.areaCmrclLvl ?? 0;
-    const pay_cnt_log = Math.log((cmr?.areaShPaymentCnt ?? 0) + 1);
+    // 2) 실시간 상권 (areaCd 기반 + 전역 fallback)
+    const cmrRes = await getLatestCommerce(db, resolvedAreaCd);
+    const cmr = cmrRes?.doc || null;
+    const commerceSource = cmrRes?.from || "none";
+    const hasCommerceData = commerceSource !== "none" && !!cmr;
+
+    let cmrcl_level = 0;
+    let pay_cnt_log = 0;
+
+    if (hasCommerceData) {
+      const lvlRaw = cmr?.areaCmrclLvl; // '보통', '높음' 같은 문자열
+      cmrcl_level = mapCmrclLevelToScore(lvlRaw); // ✅ 숫자로 변환
+
+      const rawPayCnt = cmr?.areaShPaymentCnt ?? 0;
+      pay_cnt_log = rawPayCnt > 0 ? Math.log(rawPayCnt + 1) : 0;
+    }
+
+    console.log("[DEBUG] resolvedAreaCd:", resolvedAreaCd);
+    console.log("[DEBUG] commerceSource:", commerceSource);
+    console.log("[DEBUG] cmr:", cmr);
+    console.log(
+      "[DEBUG] cmrcl_level:",
+      cmrcl_level,
+      "pay_cnt_log:",
+      pay_cnt_log
+    );
 
     // 3) 인구 (admmCd 없으면 POI의 signguNm로 폴백)
     const sggNmFallback =
@@ -540,7 +659,6 @@ router.post("/recommendations", async (req, res) => {
     // 5-1) Why this? 요약 + 상세
     const top0 = topCategories[0]?.category;
     const summaryLine = buildSummaryLine(featureVector, byCate, top0);
-    const hasCommerceData = !!cmr; // ✅ 실제 상권 데이터 존재 여부
     const whyDetails = buildWhyDetails(
       featureVector,
       byCate,
@@ -561,7 +679,8 @@ router.post("/recommendations", async (req, res) => {
           lng,
           radius,
           admmCd: admmCd || null,
-          areaCd: areaCd || null,
+          areaCdFromClient: areaCd || null,
+          resolvedAreaCd: resolvedAreaCd || null,
           targetCate: targetCate || null,
         },
         poi: { byCate, poi_total, poi_entropy },
@@ -571,6 +690,7 @@ router.post("/recommendations", async (req, res) => {
               cmrclTime: cmr.cmrclTime,
               areaCmrclLvl: cmr.areaCmrclLvl,
               areaShPaymentCnt: cmr.areaShPaymentCnt,
+              source: commerceSource, // "area" | "global"
             }
           : null,
         demographics: demo
