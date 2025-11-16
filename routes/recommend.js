@@ -183,7 +183,14 @@ const bottomN = (obj, n = 5) =>
     .sort((a, b) => a[1] - b[1])
     .slice(0, n);
 
-function buildWhyDetails(features, byCate, topCategory) {
+/**
+ * 상세 이유 블록
+ * @param {object} features      - featureVector
+ * @param {object} byCate        - { 카테고리명: 개수, ... }
+ * @param {string} topCategory   - 추천 1순위 카테고리
+ * @param {boolean} hasCommerceData - 상권/결제 데이터(cmr)가 실제로 존재하는지 여부
+ */
+function buildWhyDetails(features, byCate, topCategory, hasCommerceData = false) {
   const {
     rate_20s = 0,
     rate_30s = 0,
@@ -223,8 +230,11 @@ function buildWhyDetails(features, byCate, topCategory) {
     commerce: {
       cmrcl_level,
       pay_cnt_log,
+      // ✅ 실제로 상권 데이터(cmr)가 있었고, 그 값이 0/0인 경우에만 "데이터 없음/부족"
       notes:
-        pay_cnt_log === 0 && cmrcl_level === 0
+        hasCommerceData &&
+        pay_cnt_log === 0 &&
+        cmrcl_level === 0
           ? "상권(결제) 데이터 없음/부족"
           : undefined,
       flags: {
@@ -530,7 +540,13 @@ router.post("/recommendations", async (req, res) => {
     // 5-1) Why this? 요약 + 상세
     const top0 = topCategories[0]?.category;
     const summaryLine = buildSummaryLine(featureVector, byCate, top0);
-    const whyDetails = buildWhyDetails(featureVector, byCate, top0);
+    const hasCommerceData = !!cmr; // ✅ 실제 상권 데이터 존재 여부
+    const whyDetails = buildWhyDetails(
+      featureVector,
+      byCate,
+      top0,
+      hasCommerceData
+    );
 
     // 6) 응답
     res.json({
