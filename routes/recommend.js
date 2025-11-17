@@ -4,6 +4,9 @@ import { MongoClient } from "mongodb";
 import { z } from "zod";
 import "dotenv/config";
 
+import { buildStoreSummary } from "../utils/buildStoreSummary.js";
+import { buildAreaSummary } from "../utils/buildAreaSummary.js";
+
 // 🔹 ESM 환경에서 JSON 파일 읽기용
 import fs from "fs";
 import path from "path";
@@ -11,7 +14,7 @@ import { fileURLToPath } from "url";
 
 const router = Router();
 
-/** ====== __dirname 대체 (ESM) ====== */
+/** ====== __filename / __dirname (ESM) ====== */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -24,6 +27,7 @@ const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017";
 const DB_NAME = process.env.DB_NAME || "CapstoneDB";
 const client = new MongoClient(MONGO_URI, { maxPoolSize: 5 });
 let db;
+
 async function getDB() {
   if (!db) {
     await client.connect();
@@ -178,11 +182,11 @@ const THRESHOLDS = {
 function mapCmrclLevelToScore(level) {
   if (!level) return 0;
   const table = {
-    "매우낮음": 0.1,
-    "낮음": 0.3,
-    "보통": 0.5,
-    "높음": 0.7,
-    "매우높음": 0.9,
+    매우낮음: 0.1,
+    낮음: 0.3,
+    보통: 0.5,
+    높음: 0.7,
+    매우높음: 0.9,
   };
   const key = String(level).trim();
   return table[key] ?? 0.5; // 알 수 없는 값이면 중간 정도로
@@ -499,8 +503,13 @@ async function fetchFranchisesByCategory({ l, m, year = "2023", limit = 30 }) {
       corpNm: d.corpNm,
       frcsCnt: d.frcsCnt,
       avrgSlsAmt: d.avrgSlsAmt,
+      arUnitAvrgSlsAmt: d.arUnitAvrgSlsAmt,   // ㎡당 평균 매출
+      newFrcsRgsCnt: d.newFrcsRgsCnt,         // 신규 가맹
+      ctrtCncltnCnt: d.ctrtCncltnCnt,         // 계약 해지
+      ctrtEndCnt: d.ctrtEndCnt,               // 계약 종료
       indutyLclasNm: d.indutyLclasNm,
       indutyMlsfcNm: d.indutyMlsfcNm,
+      year: d.year,
     }));
   };
 
@@ -592,6 +601,9 @@ router.post("/recommendations", async (req, res) => {
     const poi_total = counts.reduce((a, b) => a + b, 0);
     const poi_entropy = entropyFromCounts(counts);
 
+    // 🔹 주변 상가 분포 요약
+    const storeSummary = buildStoreSummary(pois);
+
     // 2) 실시간 상권 (areaCd 기반 + 전역 fallback)
     const cmrRes = await getLatestCommerce(db, resolvedAreaCd);
     const cmr = cmrRes?.doc || null;
@@ -603,7 +615,7 @@ router.post("/recommendations", async (req, res) => {
 
     if (hasCommerceData) {
       const lvlRaw = cmr?.areaCmrclLvl; // '보통', '높음' 같은 문자열
-      cmrcl_level = mapCmrclLevelToScore(lvlRaw); // ✅ 숫자로 변환
+      cmrcl_level = mapCmrclLevelToScore(lvlRaw); // 숫자로 변환
 
       const rawPayCnt = cmr?.areaShPaymentCnt ?? 0;
       pay_cnt_log = rawPayCnt > 0 ? Math.log(rawPayCnt + 1) : 0;
@@ -624,15 +636,75 @@ router.post("/recommendations", async (req, res) => {
       pois.find((p) => p?.signguNm)?.signguNm || undefined;
     const demo = await getLatestPopulation(db, admmCd, sggNmFallback);
 
+    // 🔹 전체 인구
     const pop_total = demo?.totNmprCnt ?? 0;
+
+    // 🔹 연령대: 인구 DB 기준 (20/30대)
     const sum = (ks) => ks.reduce((acc, k) => acc + (demo?.[k] ?? 0), 0);
     const cnt20 = sum(["male20AgeNmprCnt", "feml20AgeNmprCnt"]);
     const cnt30 = sum(["male30AgeNmprCnt", "feml30AgeNmprCnt"]);
-    const female_total = demo?.femlNmprCnt ?? 0;
 
     const rate_20s = safeRate(cnt20, pop_total);
     const rate_30s = safeRate(cnt30, pop_total);
-    const female_rate = safeRate(female_total, pop_total);
+
+    // 🔹 성별 비율: 상권 결제 데이터(cmrclFemaleRate / MaleRate)를 우선 사용
+    let female_rate = null;
+
+    if (cmr?.cmrclFemaleRate != null && cmr?.cmrclMaleRate != null) {
+      const fRaw = Number(cmr.cmrclFemaleRate); // 예: 54.1
+      const mRaw = Number(cmr.cmrclMaleRate);   // 예: 45.9
+      const sumRaw = fRaw + mRaw;
+
+      // 0~1이든 0~100이든 둘이 같은 단위면 이 방식으로 항상 0~1로 정규화됨
+      female_rate = sumRaw > 0 ? fRaw / sumRaw : null;
+    } else if (demo?.femlNmprCnt != null && pop_total > 0) {
+      // fallback: 인구 DB 기반
+      female_rate = demo.femlNmprCnt / pop_total;
+    } else {
+      female_rate = null;
+    }
+
+    console.log("[DEBUG gender]", {
+      pop_total,
+      femlNmprCnt: demo?.femlNmprCnt,
+      cmrclFemaleRate: cmr?.cmrclFemaleRate,
+      cmrclMaleRate: cmr?.cmrclMaleRate,
+      final_female_rate: female_rate,
+    });
+
+    // 🔹 areaSummary용 baseInfo 구성
+    const baseInfo = {
+      AREA_NM: cmr?.areaNm || demo?.dongNm || null,        // 위치 라벨
+      AREA_CD: resolvedAreaCd || cmr?.areaCd || null,
+      ctpvNm: demo?.ctpvNm ?? null,
+      sggNm: demo?.sggNm ?? sggNmFallback ?? null,
+
+      // 인구 비율 (0~1)
+      CMRCL_20_RATE: rate_20s,
+      CMRCL_30_RATE: rate_30s,
+      CMRCL_FEMALE_RATE: female_rate,
+      CMRCL_MALE_RATE:
+        female_rate != null && female_rate <= 1 ? 1 - female_rate : null,
+
+      // 상권/결제
+      AREA_SH_PAYMENT_CNT: cmr?.areaShPaymentCnt ?? 0,
+      AREA_CMRCL_LVL: cmr?.areaCmrclLvl ?? null,
+      LIVE_CMRCL_STTS: cmr?.liveCmrclStts ?? cmr?.areaCmrclLvl ?? null,
+    };
+
+    // 🔹 상권 유형 리스트 (있으면 사용, 없으면 빈 배열)
+    const rsbList = Array.isArray(cmr?.CMRCL_RSB)
+      ? cmr.CMRCL_RSB
+      : Array.isArray(cmr?.cmrclRsbList)
+      ? cmr.cmrclRsbList
+      : [];
+
+    // 🔹 인구 + 상권 기반 요약
+    const areaSummary = buildAreaSummary({
+      baseInfo,
+      populationDoc: demo,
+      rsbList,
+    });
 
     // 4) feature vector
     const featureVector = {
@@ -673,6 +745,12 @@ router.post("/recommendations", async (req, res) => {
         line: summaryLine,
         details: whyDetails,
       },
+
+      // ✅ 프론트에서 바로 써먹을 상권/상가 요약
+      areaSummary,
+      storeSummary,
+
+      // 디버깅용 원시 데이터
       debug: {
         inputs: {
           lat,
@@ -703,8 +781,12 @@ router.post("/recommendations", async (req, res) => {
           : null,
         featureVector,
         taxonomy: collectTaxonomy(pois),
+        
       },
     });
+
+    // log areaSummary population info (use existing variable)
+    console.log('areaSummary(population) =', areaSummary?.population);
   } catch (err) {
     console.error(err);
     res.status(400).json({ error: err?.issues ?? String(err) });
